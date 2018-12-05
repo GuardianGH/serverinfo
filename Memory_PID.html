@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html style="height: 100%">
+   <head>
+       <meta charset="utf-8">
+       <title>
+            爬虫服务器资源数据
+        </title>
+       <style>
+        #link{
+            margin: 0 auto;
+            margin-bottom: 50px;
+            padding: 10 0;
+            justify-content: center;
+            text-align: center;
+            line-height: 50px;
+            height: 50px;
+            width: 100%;
+            background: darkcyan;
+        }
+        .linka
+        {
+            margin: 5px 5px 5px 5px;
+            padding: 10px;
+            width: 150px;
+            height: 30px;
+            text-decoration:none;
+            color: snow;
+            border: 1px;
+            font-size: 20pt;
+            border-radius: 5px;
+        }
+    </style>
+
+   </head>
+   <body style="height: 100%; margin: 0">
+
+
+    <div id="link"> 
+        <a class="linka" href="/now">最新数据</a>
+        <a class="linka" href="/hour">时统计</a>
+        <a class="linka" href="/day">日统计</a>
+        <a class="linka" href="/week">周统计</a>
+        <a class="linka" href="/CPU-PID">cpu-pid图</a>
+        <a class="linka" href="/Memory-PID">memory-pid图</a>
+    </div>
+
+       <div id="container" style="height: 100%"></div>
+       <script type="text/javascript" src="http://echarts.baidu.com/gallery/vendors/echarts/echarts.min.js"></script>
+       <script type="text/javascript" src="http://echarts.baidu.com/gallery/vendors/echarts-gl/echarts-gl.min.js"></script>
+       <script type="text/javascript" src="http://echarts.baidu.com/gallery/vendors/echarts-stat/ecStat.min.js"></script>
+       <script type="text/javascript" src="http://echarts.baidu.com/gallery/vendors/echarts/extension/dataTool.min.js"></script>
+       <script type="text/javascript" src="http://echarts.baidu.com/gallery/vendors/echarts/map/js/china.js"></script>
+       <script type="text/javascript" src="http://echarts.baidu.com/gallery/vendors/echarts/map/js/world.js"></script>
+       <script type="text/javascript" src="https://api.map.baidu.com/api?v=2.0&ak=ZUONbpqGBsYGXNIYHicvbAbM"></script>
+       <script type="text/javascript" src="http://echarts.baidu.com/gallery/vendors/echarts/extension/bmap.min.js"></script>
+       <script type="text/javascript" src="http://echarts.baidu.com/gallery/vendors/simplex.js"></script>
+       <script type="text/javascript">
+var dom = document.getElementById("container");
+var myChart = echarts.init(dom);
+var app = {};
+option = null;
+
+// flask传递数据,编辑器报错请忽略
+var nowList = {{ info | tojson }};
+
+// 判断数据为空则弹窗警告
+if(nowList.length == 0){
+    window.alert("数据为空！")
+};
+
+var server = new Array();
+var seriseList = new Array();
+var serverPids = [];
+var serverLines = [];
+var dates = new Array();
+
+
+for(var i=0; i<nowList.length; i++){
+    server[i] = nowList[i].address
+    serverPids.push([]);
+    serverLines.push([]);
+    for(var j=0; j<nowList[i].length; j++){
+        serverPids[i].push([nowList[i][j]["date"], nowList[i][j]["memory"],  nowList[i][j]["pid"], nowList[i][j]["address"], nowList[i][j]["address"], nowList[i][j]["memory_total"]]);
+        serverLines[i].push([nowList[i][j]["date"], nowList[i][j]["memory"]])
+    };
+};
+
+//生成从minNum到maxNum的随机数，用于填充rgb颜色
+function randomNum(minNum,maxNum){ 
+    switch(arguments.length){ 
+        case 1: 
+            return parseInt(Math.random()*minNum+1,10); 
+        break; 
+        case 2: 
+            return parseInt(Math.random()*(maxNum-minNum+1)+minNum,10); 
+        break; 
+            default: 
+                return 0; 
+            break; 
+    } 
+};
+
+for(var i=0; i<nowList.length; i++){
+    var rgb11 = randomNum(1, 255);
+    var rgb12 = randomNum(1, 255);
+    var rgb13 = randomNum(1, 255);
+    var rgb21 = randomNum(1, 255);
+    var rgb22 = randomNum(1, 255);
+    var rgb23 = randomNum(1, 255);
+    seriseList[i] = {
+        name: "serverPid",
+        type: 'scatter',
+        symbolSize: function(data) {
+            return data[2]*data[2];
+        },
+        label: {
+            emphasis: {
+                show: true,
+                formatter: function(param) {
+                    return param.data[3];
+                },
+                position: 'top'
+            }
+        },
+
+        itemStyle: {
+            normal: {
+                shadowBlur: 10,
+                shadowColor: 'rgba(120, 36, 50, 0.5)',
+                shadowOffsetY: 5,
+                color: new echarts.graphic.RadialGradient(0.4, 0.6, 1, [{
+                    offset: 0,
+                    color: 'rgb('+ rgb11 + ', ' +rgb12 +', ' + rgb13+')'
+                }, {
+                    offset: 1,
+                    color: 'rgb(' + rgb21 +', '+rgb22+', '+rgb23 + ')'
+                }])
+            }
+        },
+        data: serverPids[i]
+    }
+};
+
+for(var n=0; n<nowList.length; n++){
+    seriseList[seriseList.length] = {
+        name: 'ServerCPU',
+        type: 'line',
+        lineStyle: {
+            normal: {
+                color: '#2f4000'
+            }
+        },
+        smooth: true,
+        showSymbol: false,
+        data: serverLines[n],
+
+    }
+};
+
+
+for(var i=0; i<nowList[0].length; i++){
+        dates[i] = nowList[0][i]["date"]
+};
+
+
+option = {
+    legend: {
+        data: server,
+        bottom: 20
+    },
+    title: {
+        text: '近一周内存占用及PID(峰值, 圆圈大小代表PID的多少)变化',
+        left: 'center'
+    },
+    tooltip: {
+        trigger: 'axis',
+        axisPointer: {
+            type: 'cross'
+        },
+        formatter: function(param, ticket, callback){  
+
+            var s = "";
+            for(var i = 0; i<nowList.length; i++){
+                s += "Server: " + param[i].value[4] + ', 内存占用: ' + param[i].value[1] + "GB; "
+                + "<br/>"
+                + "Server: " + param[i].value[4] + ', PID数: ' + param[i].value[2]
+                + "<br/>"
+                + "<hr>"
+                ;
+            };
+
+            var st = '<div style="border-bottom: 1px solid rgba(255,255,255,.3); font-size: 16px;padding-bottom: 7px;margin-bottom: 7px;"> '
+                + s
+                + '</div>'
+            return st
+        }
+    },
+    grid: {
+        top: 80,
+        bottom: 90
+    },
+    xAxis: {
+            type: 'category',
+            data: dates,
+            axisPointer: {
+                type: 'shadow'
+            }
+    },
+    yAxis: {
+        type: 'value',
+        splitLine: {
+            lineStyle: {
+                type: 'dashed'
+            }
+        },
+    },
+    
+    series: seriseList
+};;
+if (option && typeof option === "object") {
+    myChart.setOption(option, true);
+}
+       </script>
+   </body>
+</html>

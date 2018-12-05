@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html style="height: 100%">
+   <head>
+       <meta charset="utf-8">
+       <title>
+           爬虫服务器资源数据
+       </title>
+       <style>
+           #link{
+               margin: 0 auto;
+               margin-bottom: 50px;
+               padding: 10 0;
+               justify-content: center;
+               text-align: center;
+               line-height: 50px;
+               height: 50px;
+               width: 100%;
+               background: darkcyan;
+           }
+           .linka
+           {
+               margin: 5px 5px 5px 5px;
+               padding: 10px;
+               width: 150px;
+               height: 30px;
+               text-decoration:none;
+               /*background: darkorange;*/
+               color: snow;
+               border: 1px;
+               font-size: 20pt;
+               border-radius: 5px;
+           }
+       </style>
+   </head>
+   <body style="height: 100%; margin: 0;">
+
+        <!-- 标题栏 -->
+        <div id="link"> 
+            <a class="linka" href="/now">最新数据</a>
+            <a class="linka" href="/hour">时统计</a>
+            <a class="linka" href="/day">日统计</a>
+            <a class="linka" href="/week">周统计</a>
+            <a class="linka" href="/CPU-PID">cpu-pid图</a>
+            <a class="linka" href="/Memory-PID">memory-pid图</a>
+        </div>
+
+        <!-- 原有的图表显示div, 用右侧工具栏截图下载的截图即为此div显示的内容 -->
+        <div id="container" style="height: 100%"></div>
+
+        <script type="text/javascript" src="http://echarts.baidu.com/gallery/vendors/echarts/echarts.min.js"></script>
+        <script type="text/javascript" src="http://echarts.baidu.com/gallery/vendors/echarts-gl/echarts-gl.min.js"></script>
+        <script type="text/javascript" src="http://echarts.baidu.com/gallery/vendors/echarts-stat/ecStat.min.js"></script>
+        <script type="text/javascript" src="http://echarts.baidu.com/gallery/vendors/echarts/extension/dataTool.min.js"></script>
+        <script type="text/javascript" src="http://echarts.baidu.com/gallery/vendors/echarts/map/js/china.js"></script>
+        <script type="text/javascript" src="http://echarts.baidu.com/gallery/vendors/echarts/map/js/world.js"></script>
+        <script type="text/javascript" src="https://api.map.baidu.com/api?v=2.0&ak=ZUONbpqGBsYGXNIYHicvbAbM"></script>
+        <script type="text/javascript" src="http://echarts.baidu.com/gallery/vendors/echarts/extension/bmap.min.js"></script>
+        <script type="text/javascript" src="http://echarts.baidu.com/gallery/vendors/simplex.js"></script>
+        <script type="text/javascript">
+
+// 原模板声明的变量及方法
+var dom = document.getElementById("container");
+var myChart = echarts.init(dom);
+var app = {};
+option = null;
+var posList = [
+    'left', 'right', 'top', 'bottom',
+    'inside',
+    'insideTop', 'insideLeft', 'insideRight', 'insideBottom',
+    'insideTopLeft', 'insideTopRight', 'insideBottomLeft', 'insideBottomRight'
+];
+
+app.configParameters = {
+    rotate: {
+        min: -90,
+        max: 90
+    },
+    align: {
+        options: {
+            left: 'left',
+            center: 'center',
+            right: 'right'
+        }
+    },
+    verticalAlign: {
+        options: {
+            top: 'top',
+            middle: 'middle',
+            bottom: 'bottom'
+        }
+    },
+    position: {
+        options: echarts.util.reduce(posList, function (map, pos) {
+            map[pos] = pos;
+            return map;
+        }, {})
+    },
+    distance: {
+        min: 0,
+        max: 100
+    }
+};
+
+app.config = {
+    rotate: 90,
+    align: 'left',
+    verticalAlign: 'middle',
+    position: 'insideBottom',
+    distance: 15,
+    onChange: function () {
+        var labelOption = {
+            normal: {
+                rotate: app.config.rotate,
+                align: app.config.align,
+                verticalAlign: app.config.verticalAlign,
+                position: app.config.position,
+                distance: app.config.distance
+            }
+        };
+        myChart.setOption({
+            series: [{
+                label: labelOption
+            }, {
+                label: labelOption
+            }, {
+                label: labelOption
+            }, {
+                label: labelOption
+            }]
+        });
+    }
+};
+
+
+var labelOption = {
+    normal: {
+        show: true,
+        position: app.config.position,
+        distance: app.config.distance,
+        align: app.config.align,
+        verticalAlign: app.config.verticalAlign,
+        rotate: app.config.rotate,
+        formatter: '{c}  {name|{a}}',
+        fontSize: 16,
+        rich: {
+            name: {
+                textBorderColor: '#fff'
+            }
+        }
+    }
+};
+
+
+// flask传递数据,编辑器报错请忽略
+var nowList = {{ info | tojson }};
+
+// 判断数据为空则弹窗警告
+if(nowList.length == 0){
+    window.alert("数据为空！")
+};
+
+// 声明需要用到的变量
+var server = new Array();
+var cpu = new Array();
+var memory = new Array();
+var memoryTotal = new Array();
+var disk = new Array();
+var diskTotal = new Array();
+var pid = new Array();
+
+// 查找最大的PID
+var Mpid = 0;
+for(var i=0; i<nowList.length; i++){
+    if(Mpid<nowList[i].pid){
+        Mpid = nowList[i].pid
+    }
+};
+// 通过遍历的方法将需要的数据传递到表格用到的列表中
+for(var i=0; i<nowList.length; i++){
+    server[i] = nowList[i].address + " (总内存: " + nowList[i].memory_total + "GB, " + "总磁盘: " + nowList[i].disks_total + "GB)",
+    cpu[i] = nowList[i].CPU,
+    mstr = String((nowList[i].memory/nowList[i].memory_total).toFixed(3))
+    memory[i] = mstr,
+    memoryTotal[i] = nowList[i].memory_tatol,
+    disk[i] = String((nowList[i].disks/nowList[i].disks_total).toFixed(3)),
+    diskTotal[i] = nowList[i].disks_total,
+    pid[i] = (nowList[i].pid/Mpid).toFixed(3)
+};
+
+// 表格选项
+option = {
+    color: ['#003366', '#006699', '#4cabce', '#e5323e'],
+    // 鼠标跟随显示
+    tooltip: {
+        trigger: 'axis',
+        axisPointer: {
+            type: 'shadow'
+        }
+    },
+    // 各字段名
+    legend: {
+        data: ['CPU', 'Memory', 'Disk']
+    },
+    toolbox: {
+        show: true,
+        orient: 'vertical',
+        left: 'right',
+        top: 'center',
+        feature: {
+            mark: {show: true},
+            dataView: {show: true, readOnly: false},
+            magicType: {show: true, type: ['line', 'bar', 'stack', 'tiled']},
+            restore: {show: true},
+            saveAsImage: {show: true}
+        }
+    },
+    calculable: true,
+
+    // X、Y轴初始化
+    xAxis: [
+        {
+            type: 'category',
+            axisTick: {show: false},
+            data: server
+        }
+    ],
+    yAxis: [
+        {
+            // max : 1,
+            type: 'value',
+        }
+    ],
+    series: [
+        {
+            name: 'CPU',
+            type: 'bar',
+            barGap: 0,
+            label: labelOption,
+            data: cpu  //data需要接收列表数据
+        },
+        {
+            name: 'Memory',
+            type: 'bar',
+            label: labelOption,
+            data: memory
+        },
+        {
+            name: 'Disk',
+            type: 'bar',
+            label: labelOption,
+            data: disk
+        },
+
+    ]
+};;
+if (option && typeof option === "object") {
+    myChart.setOption(option, true);
+}
+       </script>
+   </body>
+</html>
